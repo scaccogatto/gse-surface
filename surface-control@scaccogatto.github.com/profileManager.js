@@ -1,5 +1,4 @@
 import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
 import { PROFILE_SYSFS_PATH } from './utils.js';
 
 /**
@@ -24,8 +23,10 @@ export class ProfileManager {
     /**
      * Start monitoring the sysfs profile file for changes.
      * Also probes write permission so callers can show an error state.
+     *
+     * @returns {Promise<void>}
      */
-    start() {
+    async start() {
         const file = Gio.File.new_for_path(PROFILE_SYSFS_PATH);
 
         // Probe write permission with a no-op: open for append then close immediately
@@ -45,7 +46,7 @@ export class ProfileManager {
         }
 
         // Read initial state
-        this._currentProfile = this._readProfileSync();
+        this._currentProfile = await this._readProfileAsync();
     }
 
     /**
@@ -125,18 +126,27 @@ export class ProfileManager {
 
     // -------------------------------------------------------------------------
 
-    _readProfileSync() {
-        try {
-            const [ok, contents] = GLib.file_get_contents(PROFILE_SYSFS_PATH);
-            if (!ok) return null;
-            return new TextDecoder().decode(contents).trim();
-        } catch {
-            return null;
-        }
+    /**
+     * Read the current profile from sysfs asynchronously.
+     *
+     * @returns {Promise<string|null>}
+     */
+    _readProfileAsync() {
+        return new Promise((resolve) => {
+            const file = Gio.File.new_for_path(PROFILE_SYSFS_PATH);
+            file.load_contents_async(null, (_f, result) => {
+                try {
+                    const [ok, contents] = file.load_contents_finish(result);
+                    resolve(ok ? new TextDecoder().decode(contents).trim() : null);
+                } catch {
+                    resolve(null);
+                }
+            });
+        });
     }
 
-    _onSysfsChanged() {
-        const profile = this._readProfileSync();
+    async _onSysfsChanged() {
+        const profile = await this._readProfileAsync();
         if (!profile || profile === this._currentProfile) return;
 
         this._currentProfile = profile;

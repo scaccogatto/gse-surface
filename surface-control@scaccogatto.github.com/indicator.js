@@ -1,3 +1,4 @@
+import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as QuickSettings from 'resource:///org/gnome/shell/ui/quickSettings.js';
@@ -133,21 +134,23 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
 
 export const SurfaceIndicator = GObject.registerClass(
 class SurfaceIndicator extends QuickSettings.SystemIndicator {
-    _init(profileManager, dgpuManager, dtxManager) {
+    _init(profileManager, dgpuManager, dtxManager, extensionDir) {
         super._init();
 
-        // Panel icon — visible only when a non-default profile is active
+        // Panel icon — visible only when a non-default profile is active.
+        // Uses a Gio.FileIcon so no icon-theme registration is needed.
         this._icon = this._addIndicator();
         this._icon.visible = false;
+        const iconFile = extensionDir.resolve_relative_path(
+            'icons/hicolor/scalable/actions/surface-control-symbolic.svg'
+        );
+        this._icon.gicon = new Gio.FileIcon({file: iconFile});
 
         this._toggle = new SurfaceMenuToggle(profileManager, dgpuManager, dtxManager);
         this.quickSettingsItems.push(this._toggle);
 
         this._toggle.bind_property('checked',
             this._icon, 'visible',
-            GObject.BindingFlags.SYNC_CREATE);
-        this._toggle.bind_property('icon-name',
-            this._icon, 'icon-name',
             GObject.BindingFlags.SYNC_CREATE);
     }
 

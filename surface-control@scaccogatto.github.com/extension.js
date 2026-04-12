@@ -32,13 +32,14 @@ export default class SurfaceControlExtension extends Extension {
         ]);
 
         // Start profile monitor (also reads initial state)
-        this._profileManager.start();
+        await this._profileManager.start();
 
         // Build and register the Quick Settings indicator
         this._indicator = new SurfaceIndicator(
             this._profileManager,
             this._dgpuManager,
-            this._dtxManager
+            this._dtxManager,
+            this.dir
         );
 
         Main.panel.statusArea.quickSettings.addExternalIndicator(this._indicator);

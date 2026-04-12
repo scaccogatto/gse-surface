@@ -4,6 +4,10 @@ node_modules/
 
 # OS
 .DS_Store
+*.png
 
 # Build artifacts
 *.zip
+
+# Python virtualenv
+venv/
