@@ -1,0 +1,9 @@
+# Dependencies the extension never needs to track
+node_modules/
+.bun/
+
+# OS
+.DS_Store
+
+# Build artifacts
+*.zip

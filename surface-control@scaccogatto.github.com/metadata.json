@@ -1,0 +1,7 @@
+{
+    "uuid": "surface-control@scaccogatto.github.com",
+    "name": "Surface Control",
+    "description": "Control Microsoft Surface hardware from the Quick Settings panel.\n\nSwitch platform profiles (Low Power, Balanced, Balanced Performance, Performance) with a single tap. Changes made by external tools are reflected instantly via a kernel sysfs monitor.\n\n* Platform profiles with Quick Settings tile and panel indicator\n* Discrete GPU status (Surface Book with dGPU)\n* Surface Book 2 clipboard detachment controls\n\nRequires the linux-surface kernel. See the project URL for setup instructions.",
+    "shell-version": ["45", "46", "47", "48", "49", "50"],
+    "url": "https://github.com/scaccogatto/gse-surface"
+}
