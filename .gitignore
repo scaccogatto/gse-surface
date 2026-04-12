@@ -5,6 +5,7 @@ node_modules/
 # OS
 .DS_Store
 *.png
+!screens/*.png
 
 # Build artifacts
 *.zip

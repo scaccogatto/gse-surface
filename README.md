@@ -4,6 +4,8 @@
 
 Control your Surface device directly from the Quick Settings panel — switch power profiles, check discrete GPU state, and manage Surface Book detachment without opening a terminal.
 
+![Surface Control quick settings panel showing the tile and profile submenu](screens/full-open.png)
+
 ---
 
 ## Features
