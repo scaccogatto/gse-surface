@@ -33,12 +33,16 @@ Shows current dGPU power state and runtime PM mode in the menu. Hidden automatic
 ### Surface Book Detachment *(Surface Book 2)*
 Request or cancel clipboard detachment directly from the Quick Settings panel. Hidden automatically on devices without DTX hardware.
 
+### Battery Charge Limit *(kernel-dependent)*
+Cap charging at 60%, 80%, or 100% (no limit) to reduce long-term battery wear, right from the menu. Hidden automatically on devices whose kernel doesn't expose `charge_control_end_threshold`.
+
 ---
 
 ## Requirements
 
 - GNOME Shell **45 or later**
 - Linux Surface kernel ([linux-surface](https://github.com/linux-surface/linux-surface))
+- Battery charge limit requires kernel support for `charge_control_end_threshold`, which is model-dependent — see [linux-surface/linux-surface#1580](https://github.com/linux-surface/linux-surface/issues/1580). The section is simply hidden if your model doesn't expose it.
 
 ---
 
@@ -55,6 +59,8 @@ bash setup-permissions.sh
 This creates `/etc/tmpfiles.d/surface-control.conf` which runs at every boot via `systemd-tmpfiles`, granting your user group write access before the session starts. No reboot needed — it applies immediately.
 
 If the extension loads without this step, the tile will show **"Setup required"** and profile switching will be disabled until you run the script.
+
+The same script also grants write access to `BAT*/charge_control_end_threshold` if your kernel exposes it. This is non-blocking: if it's missing or still not writable, only the "Battery limit" section shows "Setup required" — platform profiles keep working normally.
 
 ### 2. Install the extension
 
@@ -80,7 +86,8 @@ gnome-extensions enable surface-control@scaccogatto.github.com
 
 - **Profile reads** — watches `/sys/firmware/acpi/platform_profile` via `Gio.FileMonitor` for instant, zero-overhead change detection
 - **Profile writes** — writes directly to sysfs via `Gio.File`; no subprocess, no PATH dependency
-- **Permission check** — probes write access at startup; shows an in-tile error with instructions if access is missing
+- **Battery limit** — same `Gio.FileMonitor` + direct-write approach against `BAT*/charge_control_end_threshold`, gated on a startup sysfs probe
+- **Permission check** — probes write access at startup via `Gio.File` metadata (no read/write attempt); shows an in-menu error with instructions if access is missing
 - **Hardware detection** — probes `surface dgpu` and `surface dtx` at startup; sections unavailable on your device are simply not shown
 - **Clean teardown** — all monitors cancelled, all GObject references nulled on `disable()`
 
@@ -117,6 +124,7 @@ surface-control@scaccogatto.github.com/
 ├── extension.js        # Entry point — enable() / disable() lifecycle
 ├── indicator.js        # SystemIndicator + QuickMenuToggle UI
 ├── profileManager.js   # sysfs file monitor, permission check, profile read/write
+├── batteryManager.js   # BAT0/BAT1 threshold probe, sysfs file monitor, permission check, read/write
 ├── dgpuManager.js      # dGPU detection and state
 ├── dtxManager.js       # DTX detection and detachment controls
 └── utils.js            # Profile definitions, icons, subprocess helpers

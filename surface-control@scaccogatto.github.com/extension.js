@@ -2,6 +2,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { ProfileManager } from './profileManager.js';
+import { BatteryManager } from './batteryManager.js';
 import { DgpuManager } from './dgpuManager.js';
 import { DtxManager } from './dtxManager.js';
 import { SurfaceIndicator } from './indicator.js';
@@ -9,6 +10,9 @@ import { SurfaceIndicator } from './indicator.js';
 export default class SurfaceControlExtension extends Extension {
     /** @type {ProfileManager|null} */
     _profileManager = null;
+
+    /** @type {BatteryManager|null} */
+    _batteryManager = null;
 
     /** @type {DgpuManager|null} */
     _dgpuManager = null;
@@ -22,21 +26,22 @@ export default class SurfaceControlExtension extends Extension {
     async enable() {
         // Instantiate managers
         this._profileManager = new ProfileManager();
+        this._batteryManager = new BatteryManager();
         this._dgpuManager = new DgpuManager();
         this._dtxManager = new DtxManager();
 
-        // Probe hardware features in parallel
+        // Probe hardware features and start monitors in parallel
         await Promise.all([
+            this._profileManager.start(),
+            this._batteryManager.start(),
             this._dgpuManager.probe(),
             this._dtxManager.probe(),
         ]);
 
-        // Start profile monitor (also reads initial state)
-        await this._profileManager.start();
-
         // Build and register the Quick Settings indicator
         this._indicator = new SurfaceIndicator(
             this._profileManager,
+            this._batteryManager,
             this._dgpuManager,
             this._dtxManager,
             this.dir
@@ -51,6 +56,9 @@ export default class SurfaceControlExtension extends Extension {
 
         this._profileManager?.stop();
         this._profileManager = null;
+
+        this._batteryManager?.stop();
+        this._batteryManager = null;
 
         this._dgpuManager?.destroy();
         this._dgpuManager = null;

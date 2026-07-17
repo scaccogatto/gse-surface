@@ -29,11 +29,10 @@ export class ProfileManager {
     async start() {
         const file = Gio.File.new_for_path(PROFILE_SYSFS_PATH);
 
-        // Probe write permission with a no-op: open for append then close immediately
+        // Probe write permission via file metadata — no read/write attempt needed
         try {
-            const stream = file.append_to(Gio.FileCreateFlags.NONE, null);
-            stream.close(null);
-            this._canWrite = true;
+            const info = file.query_info('access::can-write', Gio.FileQueryInfoFlags.NONE, null);
+            this._canWrite = info.get_attribute_boolean('access::can-write');
         } catch {
             this._canWrite = false;
         }

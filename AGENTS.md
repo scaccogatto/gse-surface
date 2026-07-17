@@ -22,6 +22,7 @@ surface-control@scaccogatto.github.com/
 ├── extension.js            — enable()/disable() lifecycle; async enable()
 ├── indicator.js            — SurfaceMenuToggle (QuickMenuToggle) + SurfaceIndicator (SystemIndicator)
 ├── profileManager.js       — sysfs FileMonitor, async read via Gio, sync write via replace_contents
+├── batteryManager.js       — BAT0/BAT1 charge_control_end_threshold probe, FileMonitor, sync write
 ├── dgpuManager.js          — probe() reads `surface dgpu` commands
 ├── dtxManager.js           — probe() reads `surface dtx` commands
 ├── utils.js                — PROFILES map, runCommand, runCommandVoid
@@ -42,6 +43,9 @@ Root-level files:
 - `surface` CLI v0.5.0 at `/usr/bin/surface` (linux-surface project)
 - GNOME Shell 50.0, Wayland
 - sysfs profile path: `/sys/firmware/acpi/platform_profile`
+- sysfs battery threshold path: `/sys/class/power_supply/BAT{0,1}/charge_control_end_threshold`
+  — model-dependent kernel support, see https://github.com/linux-surface/linux-surface/issues/1580.
+  Not present on this dev machine's BAT1 (checked 2026-07-17) — feature is hidden here.
 - Permissions fix: `/etc/tmpfiles.d/surface-platform-profile.conf` sets `0664 root wheel`
   — already applied on the dev machine; new users run `setup-permissions.sh`
 
@@ -69,6 +73,10 @@ when you need a `Gio.File`.
 ### Feature auto-detection
 `DgpuManager.probe()` and `DtxManager.probe()` return early if the `surface` command
 fails — UI sections are hidden via `isAvailable()`. No config needed.
+`BatteryManager.start()` follows the same pattern via a sysfs glob probe (BAT0/BAT1)
+instead of a command — `isAvailable()` gates the whole "Battery limit" section.
+Write permission (`canWrite()`) is a separate, non-blocking check — profile switching
+keeps working even if the battery threshold file isn't writable.
 
 ### No preferences window
 `metadata.json` has no `settings-schema`. Do not add one unless a real user need arises.
@@ -137,8 +145,15 @@ cd /home/gatto/Developer/gse-surface/surface-control@scaccogatto.github.com
 ZIP="$(dirname $(pwd))/surface-control@scaccogatto.github.com.shell-extension.zip"
 rm -f "$ZIP"
 zip -r "$ZIP" metadata.json extension.js indicator.js profileManager.js \
-  dgpuManager.js dtxManager.js utils.js LICENSE icons/
+  batteryManager.js dgpuManager.js dtxManager.js utils.js LICENSE icons/
 ```
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push/PR: `node --check` syntax pass over all
+`.js` files, `shexli` static analysis (installed via `pip install shexli`), and builds
+the submission zip (same `zip -r` command as above) as a build artifact — since
+`gnome-extensions pack` needs gnome-shell, which ubuntu runners don't have.
 
 ## EGO submission notes
 

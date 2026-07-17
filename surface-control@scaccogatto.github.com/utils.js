@@ -24,6 +24,9 @@ export const DEFAULT_PROFILE = 'balanced';
 
 export const PROFILE_SYSFS_PATH = '/sys/firmware/acpi/platform_profile';
 
+// Charge-limit thresholds offered in the menu (100 = no limit)
+export const BATTERY_THRESHOLDS = [60, 80, 100];
+
 /**
  * Run a command, returning stdout as a trimmed string or null on failure.
  *

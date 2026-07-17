@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-package:
+    runs-on: ubuntu-latest
+    env:
+      EXT_DIR: ${{ github.workspace }}/surface-control@scaccogatto.github.com
+      ZIP_PATH: ${{ github.workspace }}/surface-control@scaccogatto.github.com.shell-extension.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JS syntax check
+        run: |
+          for f in "$EXT_DIR"/*.js; do
+            node --check "$f"
+          done
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install shexli
+        run: pip install shexli
+
+      - name: Run shexli (GNOME Shell extension static analysis)
+        run: |
+          # shexli's own exit code is always 0 regardless of findings —
+          # gate on its "clean" summary line ourselves.
+          OUTPUT=$(shexli "$EXT_DIR")
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -qx "shexli: clean (0 findings, 0 errors, 0 warnings)"
+
+      # gnome-extensions pack requires gnome-shell, which isn't installed on
+      # ubuntu runners — build the EGO submission zip the same way AGENTS.md
+      # documents for local repackaging.
+      - name: Build submission zip
+        run: |
+          cd "$EXT_DIR"
+          zip -r "$ZIP_PATH" metadata.json extension.js indicator.js profileManager.js \
+            batteryManager.js dgpuManager.js dtxManager.js utils.js LICENSE icons/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: surface-control-shell-extension
+          path: ${{ env.ZIP_PATH }}

@@ -3,7 +3,7 @@ import GObject from 'gi://GObject';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as QuickSettings from 'resource:///org/gnome/shell/ui/quickSettings.js';
 
-import {PROFILES, DEFAULT_PROFILE} from './utils.js';
+import {PROFILES, DEFAULT_PROFILE, BATTERY_THRESHOLDS} from './utils.js';
 
 // Profile order for the menu (low → high)
 const PROFILE_ORDER = ['low-power', 'balanced', 'balanced-performance', 'performance'];
@@ -15,12 +15,12 @@ const PROFILE_ORDER = ['low-power', 'balanced', 'balanced-performance', 'perform
 //   - tile checked = any non-default profile is active
 //   - clicking tile directly: toggle DEFAULT_PROFILE ↔ last non-default
 //   - chevron opens submenu with all profiles as PopupImageMenuItem radio items
-//   - dGPU / DTX sections appear below a separator when hardware is present
+//   - dGPU / DTX / battery-limit sections appear below a separator when hardware is present
 // ---------------------------------------------------------------------------
 
 const SurfaceMenuToggle = GObject.registerClass(
 class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
-    _init(profileManager, dgpuManager, dtxManager) {
+    _init(profileManager, batteryManager, dgpuManager, dtxManager) {
         super._init({
             title: 'Power Mode',
             menuButtonAccessibleName: 'Open Surface power profile menu',
@@ -28,6 +28,7 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
         });
 
         this._profileManager = profileManager;
+        this._batteryManager = batteryManager;
         this._dgpuManager = dgpuManager;
         this._dtxManager = dtxManager;
 
@@ -56,6 +57,23 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
             this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
             this.menu.addAction('Request Detach', () => this._dtxManager.requestDetach());
             this.menu.addAction('Cancel Detach', () => this._dtxManager.cancelDetach());
+        }
+
+        if (this._batteryManager.isAvailable()) {
+            this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+            this.menu.addMenuItem(new PopupMenu.PopupMenuItem('Battery limit', {reactive: false}));
+
+            this._batterySection = new PopupMenu.PopupMenuSection();
+            this.menu.addMenuItem(this._batterySection);
+
+            if (!this._batteryManager.canWrite())
+                this._buildBatteryPermissionError();
+            else
+                this._buildBatteryItems();
+
+            this._batteryChangeHandler = t => this._syncBattery(t);
+            this._batteryManager.onChange(this._batteryChangeHandler);
+            this._syncBattery(this._batteryManager.getCurrent());
         }
 
         // Tile click: toggle default ↔ last non-default.
@@ -125,8 +143,43 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
         return `dGPU: ${state}  ·  PM: ${pm}`;
     }
 
+    _buildBatteryPermissionError() {
+        this._batteryItems = new Map();
+
+        const item = new PopupMenu.PopupMenuItem(
+            'Setup required — see project README',
+            {reactive: false}
+        );
+        item.label.style = 'color: #e5a50a;';
+        this._batterySection.addMenuItem(item);
+    }
+
+    _buildBatteryItems() {
+        this._batteryItems = new Map();
+
+        for (const threshold of BATTERY_THRESHOLDS) {
+            const label = threshold === 100 ? '100% (No limit)' : `${threshold}%`;
+            const item = new PopupMenu.PopupMenuItem(label);
+            item.connect('activate', () => this._batteryManager.setThreshold(threshold));
+            this._batteryItems.set(threshold, item);
+            this._batterySection.addMenuItem(item);
+        }
+    }
+
+    _syncBattery(threshold) {
+        if (threshold === null || threshold === undefined) return;
+
+        for (const [key, item] of this._batteryItems) {
+            item.setOrnament(
+                key === threshold ? PopupMenu.Ornament.CHECK : PopupMenu.Ornament.NONE
+            );
+        }
+    }
+
     destroy() {
         this._profileManager.offChange(this._profileChangeHandler);
+        if (this._batteryChangeHandler)
+            this._batteryManager.offChange(this._batteryChangeHandler);
         super.destroy();
     }
 });
@@ -137,7 +190,7 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
 
 export const SurfaceIndicator = GObject.registerClass(
 class SurfaceIndicator extends QuickSettings.SystemIndicator {
-    _init(profileManager, dgpuManager, dtxManager, extensionDir) {
+    _init(profileManager, batteryManager, dgpuManager, dtxManager, extensionDir) {
         super._init();
 
         // Panel icon — visible only when a non-default profile is active.
@@ -149,7 +202,7 @@ class SurfaceIndicator extends QuickSettings.SystemIndicator {
         );
         this._icon.gicon = new Gio.FileIcon({file: iconFile});
 
-        this._toggle = new SurfaceMenuToggle(profileManager, dgpuManager, dtxManager);
+        this._toggle = new SurfaceMenuToggle(profileManager, batteryManager, dgpuManager, dtxManager);
         this.quickSettingsItems.push(this._toggle);
 
         this._toggle.bind_property('checked',
