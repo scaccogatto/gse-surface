@@ -2,6 +2,8 @@
 
 **GNOME Shell extension for Microsoft Surface hardware.**
 
+[<img src="https://raw.githubusercontent.com/andyholmes/gnome-shell-extensions-badge/master/get-it-on-ego.svg" alt="Get it on GNOME Extensions" height="80">](https://extensions.gnome.org/extension/9696/surface-control/)
+
 Control your Surface device directly from the Quick Settings panel — switch power profiles, check discrete GPU state, and manage Surface Book detachment without opening a terminal.
 
 ![Surface Control quick settings panel showing the tile and profile submenu](screens/full-open.png)
@@ -55,6 +57,10 @@ This creates `/etc/tmpfiles.d/surface-control.conf` which runs at every boot via
 If the extension loads without this step, the tile will show **"Setup required"** and profile switching will be disabled until you run the script.
 
 ### 2. Install the extension
+
+The easy way — one click on [extensions.gnome.org](https://extensions.gnome.org/extension/9696/surface-control/).
+
+Or manually, from source:
 
 ```sh
 git clone https://github.com/scaccogatto/gse-surface.git
