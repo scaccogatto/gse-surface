@@ -58,10 +58,13 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
             this.menu.addAction('Cancel Detach', () => this._dtxManager.cancelDetach());
         }
 
-        // Tile click: toggle default ↔ last non-default
+        // Tile click: toggle default ↔ last non-default.
+        // With toggleMode St.Button flips `checked` BEFORE emitting `clicked`,
+        // so here `checked === true` means the user is switching AWAY from the
+        // default profile.
         this.connect('clicked', () => {
             if (!this._profileManager.canWrite()) return;
-            const target = this.checked ? DEFAULT_PROFILE : this._lastActiveProfile;
+            const target = this.checked ? this._lastActiveProfile : DEFAULT_PROFILE;
             this._profileManager.setProfile(target);
         });
 
