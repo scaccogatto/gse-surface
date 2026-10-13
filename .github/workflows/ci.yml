@@ -12,7 +12,7 @@ jobs:
       EXT_DIR: ${{ github.workspace }}/surface-control@scaccogatto.github.com
       ZIP_PATH: ${{ github.workspace }}/surface-control@scaccogatto.github.com.shell-extension.zip
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: JS syntax check
         run: |
@@ -20,7 +20,7 @@ jobs:
             node --check "$f"
           done
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
@@ -44,7 +44,7 @@ jobs:
           zip -r "$ZIP_PATH" metadata.json extension.js indicator.js profileManager.js \
             batteryManager.js dgpuManager.js dtxManager.js utils.js LICENSE icons/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: surface-control-shell-extension
           path: ${{ env.ZIP_PATH }}
