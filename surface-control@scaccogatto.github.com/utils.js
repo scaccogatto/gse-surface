@@ -30,10 +30,13 @@ export const BATTERY_THRESHOLDS = [60, 80, 100];
 /**
  * Run a command, returning stdout as a trimmed string or null on failure.
  *
+ * Resolves null when the command fails or `cancellable` is cancelled first.
+ *
  * @param {string[]} argv
+ * @param {Gio.Cancellable|null} [cancellable]
  * @returns {Promise<string|null>}
  */
-export function runCommand(argv) {
+export function runCommand(argv, cancellable = null) {
     return new Promise(resolve => {
         try {
             const proc = Gio.Subprocess.new(
@@ -41,7 +44,7 @@ export function runCommand(argv) {
                 Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
             );
 
-            proc.communicate_utf8_async(null, null, (_proc, res) => {
+            proc.communicate_utf8_async(null, cancellable, (_proc, res) => {
                 try {
                     const [, stdout] = _proc.communicate_utf8_finish(res);
                     resolve(_proc.get_exit_status() === 0 ? (stdout?.trim() ?? '') : null);
