@@ -5,46 +5,61 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint-and-package:
     runs-on: ubuntu-latest
     env:
-      EXT_DIR: ${{ github.workspace }}/surface-control@scaccogatto.github.com
       ZIP_PATH: ${{ github.workspace }}/surface-control@scaccogatto.github.com.shell-extension.zip
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
 
       - name: JS syntax check
-        run: |
-          for f in "$EXT_DIR"/*.js; do
-            node --check "$f"
-          done
+        run: npm run check
 
-      - uses: actions/setup-python@v7
+      - name: Unit tests
+        run: npm test
+
+      - name: Shell scripts (shellcheck)
+        run: shellcheck setup-permissions.sh scripts/pack.sh
+
+      - name: udev rule syntax
+        run: |
+          bash setup-permissions.sh --print udev > "$RUNNER_TEMP/70-surface-control.rules"
+          udevadm verify "$RUNNER_TEMP/70-surface-control.rules"
+
+      - name: LICENSE copies are identical
+        run: cmp LICENSE surface-control@scaccogatto.github.com/LICENSE
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.x'
+          python-version: '3.13'
 
       - name: Install shexli
-        run: pip install shexli
-
-      - name: Run shexli (GNOME Shell extension static analysis)
-        run: |
-          # shexli's own exit code is always 0 regardless of findings —
-          # gate on its "clean" summary line ourselves.
-          OUTPUT=$(shexli "$EXT_DIR")
-          echo "$OUTPUT"
-          echo "$OUTPUT" | grep -qx "shexli: clean (0 findings, 0 errors, 0 warnings)"
+        run: pip install -r requirements-ci.txt
 
       # gnome-extensions pack requires gnome-shell, which isn't installed on
-      # ubuntu runners — build the EGO submission zip the same way AGENTS.md
-      # documents for local repackaging.
+      # ubuntu runners: build the EGO submission zip with the same script the
+      # docs and the release workflow use.
       - name: Build submission zip
-        run: |
-          cd "$EXT_DIR"
-          zip -r "$ZIP_PATH" metadata.json extension.js indicator.js profileManager.js \
-            batteryManager.js dgpuManager.js dtxManager.js utils.js LICENSE icons/
+        run: sh scripts/pack.sh "$ZIP_PATH"
 
-      - uses: actions/upload-artifact@v7
+      - name: Run shexli (GNOME Shell extension static analysis)
+        run: python3 scripts/shexli_gate.py surface-control@scaccogatto.github.com "$ZIP_PATH"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: surface-control-shell-extension
           path: ${{ env.ZIP_PATH }}

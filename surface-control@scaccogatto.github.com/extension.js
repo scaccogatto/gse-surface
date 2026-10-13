@@ -23,8 +23,26 @@ export default class SurfaceControlExtension extends Extension {
     /** @type {SurfaceIndicator|null} */
     _indicator = null;
 
+    /**
+     * Identifies the current enable() call. GNOME Shell does not await
+     * enable(), so disable() (lock screen, session-mode change, user toggle)
+     * can run while the hardware probes below are still pending. disable()
+     * clears the token, and a resumed enable() that no longer owns it must
+     * not build any UI.
+     *
+     * @type {object|null}
+     */
+    _enableToken = null;
+
     async enable() {
-        // Instantiate managers
+        // Defensive: never leak the managers or the tile of a previous enable().
+        this._teardown();
+
+        const token = {};
+        this._enableToken = token;
+
+        // Instantiate managers. They are stored on `this` right away so that
+        // a disable() during the probes stops their monitors and subprocesses.
         this._profileManager = new ProfileManager();
         this._batteryManager = new BatteryManager();
         this._dgpuManager = new DgpuManager();
@@ -37,6 +55,11 @@ export default class SurfaceControlExtension extends Extension {
             this._dgpuManager.probe(),
             this._dtxManager.probe(),
         ]);
+
+        // disable() (or a newer enable()) ran during the probes and already
+        // tore these managers down.
+        if (this._enableToken !== token)
+            return;
 
         // Build and register the Quick Settings indicator
         this._indicator = new SurfaceIndicator(
@@ -51,6 +74,12 @@ export default class SurfaceControlExtension extends Extension {
     }
 
     disable() {
+        this._teardown();
+    }
+
+    _teardown() {
+        this._enableToken = null;
+
         this._indicator?.destroy();
         this._indicator = null;
 

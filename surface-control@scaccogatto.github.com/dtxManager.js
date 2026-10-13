@@ -1,3 +1,5 @@
+import Gio from 'gi://Gio';
+
 import {runCommand, runCommandVoid} from './utils.js';
 
 /**
@@ -8,14 +10,17 @@ import {runCommand, runCommandVoid} from './utils.js';
 export class DtxManager {
     _available = false;
 
+    /** @type {Gio.Cancellable} cancelled by destroy() to drop the in-flight probe */
+    _cancellable = new Gio.Cancellable();
+
     /**
      * Probe DTX availability.
      *
      * @returns {Promise<void>}
      */
     async probe() {
-        const mode = await runCommand(['surface', 'dtx', 'get-devicemode']);
-        this._available = mode !== null;
+        const mode = await runCommand(['surface', 'dtx', 'get-devicemode'], this._cancellable);
+        this._available = mode !== null && !this._cancellable.is_cancelled();
     }
 
     /** @returns {boolean} true if DTX hardware is present */
@@ -42,6 +47,7 @@ export class DtxManager {
     }
 
     destroy() {
+        this._cancellable.cancel();
         this._available = false;
     }
 }

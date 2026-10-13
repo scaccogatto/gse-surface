@@ -1,0 +1,15 @@
+{
+  "name": "gse-surface",
+  "private": true,
+  "description": "Development tooling for the Surface Control GNOME Shell extension (not shipped in the extension zip)",
+  "license": "GPL-2.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "node scripts/check-syntax.mjs",
+    "test": "node --import ./tests/setup.mjs --test \"tests/*.test.mjs\"",
+    "pack": "sh scripts/pack.sh"
+  }
+}

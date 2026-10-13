@@ -4,7 +4,7 @@
 
 [<img src="https://raw.githubusercontent.com/andyholmes/gnome-shell-extensions-badge/master/get-it-on-ego.svg" alt="Get it on GNOME Extensions" height="80">](https://extensions.gnome.org/extension/9696/surface-control/)
 
-Control your Surface device directly from the Quick Settings panel — switch power profiles, check discrete GPU state, and manage Surface Book detachment without opening a terminal.
+Control your Surface device directly from the Quick Settings panel — switch power profiles, cap the battery charge limit, check discrete GPU state, and manage Surface Book detachment without opening a terminal.
 
 ![Surface Control quick settings panel showing the tile and profile submenu](screens/full-open.png)
 
@@ -28,7 +28,7 @@ The tile shows the active profile. Clicking it toggles between Balanced and your
 A contextual icon appears in the top bar whenever you're on a non-Balanced profile — a quick visual reminder without permanent clutter.
 
 ### Discrete GPU Status *(Surface Book with dGPU)*
-Shows current dGPU power state and runtime PM mode in the menu. Hidden automatically on devices without a discrete GPU.
+Shows the dGPU power state and runtime PM mode in the menu, re-read every time you open it. Hidden automatically on devices without a discrete GPU.
 
 ### Surface Book Detachment *(Surface Book 2)*
 Request or cancel clipboard detachment directly from the Quick Settings panel. Hidden automatically on devices without DTX hardware.
@@ -42,6 +42,7 @@ Cap charging at 60%, 80%, or 100% (no limit) to reduce long-term battery wear, r
 
 - GNOME Shell **45 or later**
 - Linux Surface kernel ([linux-surface](https://github.com/linux-surface/linux-surface))
+- The `surface` CLI from linux-surface, only for the dGPU status and Surface Book detachment sections. Platform profiles and the battery charge limit read and write sysfs directly.
 - Battery charge limit requires kernel support for `charge_control_end_threshold`, which is model-dependent — see [linux-surface/linux-surface#1580](https://github.com/linux-surface/linux-surface/issues/1580). The section is simply hidden if your model doesn't expose it.
 
 ---
@@ -56,7 +57,14 @@ The kernel exposes the power profile at `/sys/firmware/acpi/platform_profile`, b
 bash setup-permissions.sh
 ```
 
-This creates `/etc/tmpfiles.d/surface-control.conf` which runs at every boot via `systemd-tmpfiles`, granting your user group write access before the session starts. No reboot needed — it applies immediately.
+The script:
+
+- creates a dedicated `surface-control` system group and adds you to it (only members of that group get write access, not everyone who shares your primary group)
+- installs `/etc/udev/rules.d/70-surface-control.rules`, which sets the permission whenever the Surface platform-profile driver binds or a battery appears, so it also works when the Surface drivers load late in boot
+- installs `/etc/tmpfiles.d/surface-control.conf` as an early-boot fallback
+- applies the permission immediately, no reboot needed
+
+**Log out and back in once afterwards**, so your session picks up the new group. `bash setup-permissions.sh --print udev` (or `--print tmpfiles`) shows the generated files without changing anything.
 
 If the extension loads without this step, the tile will show **"Setup required"** and profile switching will be disabled until you run the script.
 
@@ -89,7 +97,8 @@ gnome-extensions enable surface-control@scaccogatto.github.com
 - **Battery limit** — same `Gio.FileMonitor` + direct-write approach against `BAT*/charge_control_end_threshold`, gated on a startup sysfs probe
 - **Permission check** — probes write access at startup via `Gio.File` metadata (no read/write attempt); shows an in-menu error with instructions if access is missing
 - **Hardware detection** — probes `surface dgpu` and `surface dtx` at startup; sections unavailable on your device are simply not shown
-- **Clean teardown** — all monitors cancelled, all GObject references nulled on `disable()`
+- **dGPU state** — re-read with `surface dgpu` each time the menu opens, so the row never shows a stale value
+- **Clean teardown** — all monitors cancelled, pending probes cancelled, all GObject references nulled on `disable()`, even when it runs before the startup probes finish
 
 ---
 
@@ -100,21 +109,42 @@ gnome-extensions enable surface-control@scaccogatto.github.com
 git clone https://github.com/scaccogatto/gse-surface.git
 cd gse-surface
 
-# Symlink for live editing
+# Symlink for live editing, then enable it once
 ln -sf "$PWD/surface-control@scaccogatto.github.com" \
         ~/.local/share/gnome-shell/extensions/
-
-# Reload extension without logout (disable + enable via DBus)
-gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
-  --method org.gnome.Shell.Extensions.DisableExtension \
-  "surface-control@scaccogatto.github.com"
-gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
-  --method org.gnome.Shell.Extensions.EnableExtension \
-  "surface-control@scaccogatto.github.com"
+gnome-extensions enable surface-control@scaccogatto.github.com
 
 # Watch logs
 journalctl -f -o cat /usr/bin/gnome-shell | grep -i surface
 ```
+
+#### Running edited code
+
+GJS caches ES modules and cannot unload them, so disabling and re-enabling the extension (`gnome-extensions disable/enable` or the DBus `DisableExtension`/`EnableExtension` calls) only re-runs `disable()`/`enable()` on the code that is already loaded. Edited `.js` files are picked up only by a new GNOME Shell process, and a Wayland session cannot restart the shell in place.
+
+Test changes in a nested shell instead, started fresh after every edit:
+
+```sh
+# GNOME Shell 49 and later (needs the mutter devkit)
+dbus-run-session gnome-shell --devkit --wayland
+
+# GNOME Shell 45 to 48
+dbus-run-session gnome-shell --nested --wayland
+```
+
+The nested shell reads the same dconf settings, so the extension enabled above loads in it. Logging out and back in also works.
+
+#### Checks
+
+```sh
+npm run check   # node --check over every extension module (Node 24+)
+npm test        # unit tests: extension modules against GJS stubs (tests/stubs)
+sh scripts/pack.sh   # build the EGO submission zip (single source of truth for its contents)
+pip install -r requirements-ci.txt   # Python 3.12+
+python3 scripts/shexli_gate.py surface-control@scaccogatto.github.com surface-control@scaccogatto.github.com.shell-extension.zip
+```
+
+CI runs all of the above plus `shellcheck` and `udevadm verify` on the setup script's udev rule. Publishing a GitHub release attaches the zip to it.
 
 ### File Structure
 
@@ -128,7 +158,9 @@ surface-control@scaccogatto.github.com/
 ├── dgpuManager.js      # dGPU detection and state
 ├── dtxManager.js       # DTX detection and detachment controls
 └── utils.js            # Profile definitions, icons, subprocess helpers
-setup-permissions.sh    # One-time setup: grants write access to sysfs profile file
+setup-permissions.sh    # One-time setup: surface-control group, udev rule, tmpfiles fallback
+scripts/                # pack.sh (EGO zip), check-syntax.mjs, shexli_gate.py
+tests/                  # node:test unit tests and GJS stubs (not shipped)
 ```
 
 ---
