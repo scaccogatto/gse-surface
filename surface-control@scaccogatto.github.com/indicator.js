@@ -51,6 +51,13 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
                 this._dgpuLabel(), {reactive: false}
             );
             this.menu.addMenuItem(this._dgpuStatusItem);
+
+            // The power state changes at runtime: re-read it whenever the
+            // menu opens so the row never shows a stale boot-time value.
+            this._menuOpenId = this.menu.connect('open-state-changed', (_menu, isOpen) => {
+                if (isOpen)
+                    this._refreshDgpu();
+            });
         }
 
         if (this._dtxManager.isAvailable()) {
@@ -94,13 +101,7 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
 
     _buildPermissionError() {
         this._profileItems = new Map();
-
-        const item = new PopupMenu.PopupMenuItem(
-            'Setup required — see project README',
-            {reactive: false}
-        );
-        item.label.style = 'color: #e5a50a;';
-        this._profileSection.addMenuItem(item);
+        this._profileSection.addMenuItem(this._setupRequiredItem());
 
         this.set({subtitle: 'Setup required', iconName: 'dialog-warning-symbolic'});
         this.reactive = false;
@@ -137,6 +138,13 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
         }
     }
 
+    async _refreshDgpu() {
+        await this._dgpuManager.refresh();
+        // The toggle may have been destroyed while the subprocesses ran.
+        if (this._dgpuStatusItem)
+            this._dgpuStatusItem.label.text = this._dgpuLabel();
+    }
+
     _dgpuLabel() {
         const state = this._dgpuManager.getPowerState() ?? 'unknown';
         const pm = this._dgpuManager.getRuntimePm() ?? 'unknown';
@@ -145,13 +153,20 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
 
     _buildBatteryPermissionError() {
         this._batteryItems = new Map();
+        this._batterySection.addMenuItem(this._setupRequiredItem());
+    }
 
-        const item = new PopupMenu.PopupMenuItem(
+    /**
+     * Non-interactive warning row. Uses the themed warning icon instead of a
+     * hardcoded label color, so it follows the shell theme, light/dark style
+     * and high-contrast mode.
+     */
+    _setupRequiredItem() {
+        return new PopupMenu.PopupImageMenuItem(
             'Setup required — see project README',
+            'dialog-warning-symbolic',
             {reactive: false}
         );
-        item.label.style = 'color: #e5a50a;';
-        this._batterySection.addMenuItem(item);
     }
 
     _buildBatteryItems() {
@@ -177,6 +192,9 @@ class SurfaceMenuToggle extends QuickSettings.QuickMenuToggle {
     }
 
     destroy() {
+        if (this._menuOpenId)
+            this.menu.disconnect(this._menuOpenId);
+        this._dgpuStatusItem = null;
         this._profileManager.offChange(this._profileChangeHandler);
         if (this._batteryChangeHandler)
             this._batteryManager.offChange(this._batteryChangeHandler);
